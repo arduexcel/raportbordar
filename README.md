@@ -1,1 +1,144 @@
-# raportbordar
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-firestore-compat.js"></script>
+    <style>
+        body { font-family: 'Tahoma', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .nav { background: #1a73e8; color: white; padding: 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .filter-section { background: white; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .main-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .report-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+        .card-title { display: flex; justify-content: space-between; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; margin-bottom: 15px; }
+        .item { padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        .match { background-color: #2ecc71 !important; color: white; border: none; }
+        .no-match { background-color: #e74c3c !important; color: white; border: none; }
+        .details { font-size: 0.85em; background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 4px; }
+        input, button { padding: 8px 12px; border-radius: 6px; border: 1px solid #ddd; }
+        button { background: #1a73e8; color: white; cursor: pointer; border: none; }
+        .staff-box { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 20px; display: none; border: 1px solid #1a73e8; }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <h2>سیستەمی چاودێری ئۆتۆمبێل</h2>
+    <button style="background:#34495e" onclick="toggleStaff()">بەڕێوبەری ستاف ⚙️</button>
+</div>
+
+<div id="staffDiv" class="staff-box">
+    <h3>زیادکردنی ستاف</h3>
+    <input type="text" id="sU" placeholder="User">
+    <input type="password" id="sP" placeholder="Pass">
+    <button onclick="addStaff()">خەزن</button>
+</div>
+
+<div class="filter-section">
+    <strong>ڕاپۆرتی ڕۆژی:</strong>
+    <input type="date" id="dateSelect" onchange="loadData()">
+    <button onclick="loadData()">Refresh 🔄</button>
+</div>
+
+<div class="main-container">
+    <div class="report-card">
+        <div class="card-title">
+            <h3>Invoices (سیستم)</h3>
+            <span id="totalR" style="background:#333; color:white; padding:2px 10px; border-radius:15px">0</span>
+        </div>
+        <div id="rightList"></div>
+    </div>
+
+    <div class="report-card">
+        <div class="card-title">
+            <h3>داخلکراوی ستاف</h3>
+            <span id="totalL" style="background:#333; color:white; padding:2px 10px; border-radius:15px">0</span>
+        </div>
+        <div id="leftList"></div>
+    </div>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyAMI84_IuKUZVqc8ImMW7eahru20cTkjFM",
+        authDomain: "sysam-k.firebaseapp.com",
+        projectId: "sysam-k",
+        storageBucket: "sysam-k.firebasestorage.app",
+        messagingSenderId: "905972435434",
+        appId: "1:905972435434:web:2501e11240523f8368ca93"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    document.getElementById('dateSelect').valueAsDate = new Date();
+
+    async function loadData() {
+        const dateStr = document.getElementById('dateSelect').value;
+        if(!dateStr) return;
+
+        let invoicesList = []; // تەنها بۆ بەراوردکردن
+
+        // 1. خوێندنەوەی داتا لای ڕاست
+        const snapshotR = await db.collection('Invoices').doc(dateStr).collection('AllInvoices').get();
+        let htmlR = "";
+        
+        snapshotR.forEach(doc => {
+            const data = doc.data();
+            
+            // ئەگەر ناوی فیڵدەکان لای تۆ جیاوازە (بۆ نموونە Car_No یان Hela)، لێرە بیگۆڕە
+            const carNum = data.carNumber || data.CarNumber || "بێ ژمارە";
+            const carLine = data.line || data.Line || "بێ هێڵ";
+
+            invoicesList.push(carNum.toString());
+
+            htmlR += `<div class="item">
+                        <span>🚗 ${carNum}</span>
+                        <span class="details">هێڵ: ${carLine}</span>
+                      </div>`;
+        });
+        document.getElementById('rightList').innerHTML = htmlR || "هیچ داتایەک نییە";
+        document.getElementById('totalR').innerText = snapshotR.size;
+
+        // 2. خوێندنەوەی داتا لای چەپ
+        const start = new Date(dateStr); start.setHours(0,0,0,0);
+        const end = new Date(dateStr); end.setHours(23,59,59,999);
+
+        const snapshotL = await db.collection('StaffInputs')
+            .where('timestamp', '>=', start)
+            .where('timestamp', '<=', end)
+            .get();
+
+        let htmlL = "";
+        snapshotL.forEach(doc => {
+            const sNum = doc.data().carNumber;
+            const isMatch = invoicesList.includes(sNum.toString());
+            const statusClass = isMatch ? 'match' : 'no-match';
+
+            htmlL += `<div class="item ${statusClass}">
+                        <span>🚗 ${sNum}</span>
+                        <span>${isMatch ? ' ✅' : ' ❌'}</span>
+                      </div>`;
+        });
+        document.getElementById('leftList').innerHTML = htmlL || "ستاف داتای داخل نەکردووە";
+        document.getElementById('totalL').innerText = snapshotL.size;
+    }
+
+    function addStaff() {
+        const u = document.getElementById('sU').value;
+        const p = document.getElementById('sP').value;
+        if(u && p) {
+            db.collection('StaffUsers').doc(u).set({username: u, password: p})
+            .then(() => alert("سەرکەوتوو بوو"));
+        }
+    }
+
+    function toggleStaff() {
+        const x = document.getElementById('staffDiv');
+        x.style.display = x.style.display === 'block' ? 'none' : 'block';
+    }
+
+    loadData();
+</script>
+</body>
+</html>
